@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>비대칭 나비넥타이 SPAD 시뮬레이터</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Noto Sans KR',sans-serif; background:#0f172a; color:#f1f5f9; padding:20px 14px; line-height:1.6; }
+  .wrap { max-width:1180px; margin:0 auto; }
+  header { text-align:center; margin-bottom:20px; }
+  header h1 { font-size:25px; font-weight:700; color:#38bdf8; margin-bottom:6px; }
+  header p { font-size:14px; color:#94a3b8; }
+  .main { display:flex; gap:22px; flex-wrap:wrap; }
+  .left { flex:1 1 460px; }
+  .right { flex:1 1 320px; display:flex; flex-direction:column; gap:16px; }
+  .panel { background:#1e293b; border-radius:14px; padding:18px 20px; border:1px solid #334155; }
+  canvas { display:block; width:100%; border-radius:10px; background:#020617; border:1px solid #334155; }
+  .btns { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  button { font-family:inherit; font-size:14px; font-weight:500; cursor:pointer; padding:11px 16px; border-radius:9px; border:none; color:#fff; transition:transform .1s,filter .1s; }
+  button:active { transform:scale(0.97); }
+  button:disabled { opacity:0.4; cursor:not-allowed; }
+  .b-light { background:linear-gradient(135deg,#22c55e,#16a34a); }
+  .b-noise { background:linear-gradient(135deg,#f97316,#ea580c); }
+  .b-auto  { background:#334155; }
+  .b-reset { background:#334155; }
+  button:hover:not(:disabled) { filter:brightness(1.1); }
+  .slider-group { margin-bottom:14px; }
+  .slider-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .slider-head label { font-size:14px; font-weight:500; }
+  .slider-head span { font-size:14px; color:#38bdf8; font-weight:700; }
+  input[type=range] { width:100%; height:6px; }
+  #tempSlider { accent-color:#f97316; }
+  #windowSlider { accent-color:#38bdf8; }
+  #speedSlider { accent-color:#a78bfa; }
+  .hint { font-size:12px; color:#64748b; margin-top:4px; }
+  .status { background:#020617; border-radius:10px; padding:16px; border-left:4px solid #475569; transition:border-color .3s; }
+  .status.signal { border-color:#22c55e; }
+  .status.noise  { border-color:#f97316; }
+  .status.amp    { border-color:#ef4444; }
+  .status-title { font-size:11px; color:#64748b; letter-spacing:1px; text-transform:uppercase; }
+  .status-val { font-size:20px; font-weight:700; margin-top:4px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .mini { background:#0f172a; border-radius:8px; padding:10px 12px; }
+  .mini .l { font-size:11px; color:#64748b; }
+  .mini .v { font-size:18px; font-weight:700; margin-top:2px; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:12px; color:#94a3b8; justify-content:center; }
+  .legend span { display:flex; align-items:center; gap:5px; }
+  .dot { width:10px; height:10px; border-radius:50%; }
+  .record .row { display:flex; gap:18px; flex-wrap:wrap; font-size:14px; margin-top:6px; }
+  .glabel { font-size:12px; color:#64748b; margin:2px 0 6px; }
+  footer { text-align:center; font-size:12px; color:#64748b; margin-top:22px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>비대칭 나비넥타이 SPAD 시뮬레이터</h1>
+    <p>빛과 열 노이즈를 발생시켜 눈사태 증폭과 동시 도달 판정을 관찰하세요</p>
+  </header>
+
+  <div class="main">
+    <div class="left">
+      <div class="panel">
+        <canvas id="stage" width="560" height="380"></canvas>
+        <div class="legend">
+          <span><span class="dot" style="background:#22d3ee;"></span>전자 (−)</span>
+          <span><span class="dot" style="background:#f472b6;"></span>양공 (+)</span>
+          <span><span class="dot" style="background:#facc15;"></span>빛(광자)</span>
+          <span><span class="dot" style="background:rgba(255,255,255,0.25);"></span>실리콘 원자</span>
+        </div>
+        <div class="glabel" style="margin-top:14px;">출력 신호 세기 (시간에 따른 전류)</div>
+        <canvas id="graph" width="560" height="110"></canvas>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <div class="btns">
+          <button class="b-light" id="btnLight">💡 진짜 빛 쏘기</button>
+          <button class="b-noise" id="btnNoise">🔥 열 노이즈</button>
+          <button class="b-auto" id="btnAuto">▶ 자동</button>
+          <button class="b-reset" id="btnReset">↻ 초기화</button>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-head"><label>센서 온도</label><span id="tempOut">27 °C</span></div>
+          <input type="range" id="tempSlider" min="-40" max="120" value="27" step="1">
+          <p class="hint">온도가 높을수록 빛 없이도 열로 인해 노이즈가 자주 발생합니다.</p>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-head"><label>동시 도달 허용 오차</label><span id="windowOut">40 ps</span></div>
+          <input type="range" id="windowSlider" min="5" max="120" value="40" step="5">
+          <p class="hint">좁을수록 노이즈를 잘 걸러내지만 진짜 신호를 놓칠 수도 있습니다.</p>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-head"><label>애니메이션 속도</label><span id="speedOut">0.5×</span></div>
+          <input type="range" id="speedSlider" min="0.15" max="1.5" value="0.5" step="0.05">
+          <p class="hint">느리게 하면 입자 움직임과 도달 순간을 자세히 볼 수 있습니다.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div id="status" class="status">
+          <div class="status-title">현재 상태</div>
+          <div id="statusVal" class="status-val" style="color:#94a3b8;">대기 중</div>
+          <div class="grid2">
+            <div class="mini"><div class="l">전자 도달</div><div class="v" id="statE" style="color:#22d3ee;">—</div></div>
+            <div class="mini"><div class="l">양공 도달</div><div class="v" id="statH" style="color:#f472b6;">—</div></div>
+            <div class="mini"><div class="l">시간 차이</div><div class="v" id="statDt">—</div></div>
+            <div class="mini"><div class="l">증폭된 전자</div><div class="v" id="statAmp" style="color:#ef4444;">0</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel record">
+        <div class="status-title">누적 판정 기록</div>
+        <div class="row">
+          <div><span style="color:#22c55e;">✓ 검출</span> <b id="cS">0</b></div>
+          <div><span style="color:#f97316;">✗ 노이즈 차단</span> <b id="cN">0</b></div>
+          <div><span style="color:#facc15;">⚠ 놓침</span> <b id="cM">0</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>대전대신고등학교 · 팀 SPAD · 2026 제3회 전국 고교생 반도체 기술대회</footer>
+</div>
+
+<script>
+(function(){
+  const cv=document.getElementById('stage'), ctx=cv.getContext('2d');
+  const gc=document.getElementById('graph'), gx=gc.getContext('2d');
+  const W=560,H=380,GW=560,GH=110;
+
+  const COL={e:'#22d3ee',h:'#f472b6',photon:'#facc15',
+             wingE:'#38bdf8',wingH:'#f472b6',absorp:'#f97316',atom:'rgba(255,255,255,0.25)'};
+
+  const absorp={x:280,y:190}, detB={x:525,y:70}, detA={x:55,y:320};
+
+  // 기준 도달 시간(ms). 전자는 양공보다 빠르지만(이동도 3배) 경로가 3배 길어서
+  // 진짜 빛일 때는 둘이 비슷한 시각에 도달하도록 설계.
+  const BASE = 2600; // ms, speed=1 기준
+  const T_E = BASE * 1.00;  // 전자: 넓은 날개(긴 경로)
+  const T_H = BASE * 1.00;  // 양공: 좁은 날개(짧은 경로) → 진짜 빛이면 일치
+
+  // 상태 머신: idle -> photon -> moving -> verdict -> (idle)
+  let mode='idle';
+  let tWindow=40, tempC=27, speed=0.5;
+  let cnt={s:0,n:0,m:0};
+
+  let photonY=-20;
+  let particles=[]; // {type,ix,iy,x,y,tx,ty,dur,delay,t,arrived,amplified}
+  let flashes=[];
+  let atoms=[];
+  let ampCount=0;
+  let verdictInfo=null, verdictStart=0;
+  let simStart=0;
+  let signalVal=0, smooth=0, history=new Array(GW).fill(0), detectPulse=0;
+  let auto=null;
+  let lastFrame=performance.now();
+
+  function initAtoms(){
+    atoms=[];
+    // 전자 날개(넓은 쪽)에 격자 원자를 넓게 분포시켜 눈사태 증폭 표현
+    for(let i=0;i<22;i++){
+      const t=0.22+Math.random()*0.68;
+      const cx=absorp.x+(detB.x-absorp.x)*t;
+      const cy=absorp.y+(detB.y-absorp.y)*t;
+      const ang=Math.atan2(detB.y-absorp.y,detB.x-absorp.x)+Math.PI/2;
+      const off=(Math.random()-0.5)*2*(20+t*55); // 날개폭 따라 퍼짐
+      atoms.push({x:cx+Math.cos(ang)*off, y:cy+Math.sin(ang)*off, hit:false});
+    }
+  }
+  initAtoms();
+
+  function wing(from,to,spread,color){
+    const ang=Math.atan2(to.y-from.y,to.x-from.x), p=ang+Math.PI/2;
+    ctx.beginPath();
+    ctx.moveTo(from.x+Math.cos(p)*8,from.y+Math.sin(p)*8);
+    ctx.lineTo(to.x+Math.cos(p)*spread,to.y+Math.sin(p)*spread);
+    ctx.lineTo(to.x-Math.cos(p)*spread,to.y-Math.sin(p)*spread);
+    ctx.lineTo(from.x-Math.cos(p)*8,from.y-Math.sin(p)*8);
+    ctx.closePath();
+    ctx.fillStyle=color; ctx.globalAlpha=0.1; ctx.fill();
+    ctx.globalAlpha=1; ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.stroke();
+  }
+
+  function drawStruct(){
+    ctx.clearRect(0,0,W,H);
+    wing(absorp,detB,80,COL.wingE);
+    wing(absorp,detA,52,COL.wingH);
+    atoms.forEach(a=>{ ctx.fillStyle= a.hit?'rgba(239,68,68,0.5)':COL.atom;
+      ctx.beginPath(); ctx.arc(a.x,a.y,3.5,0,Math.PI*2); ctx.fill(); });
+    ctx.fillStyle=COL.absorp; ctx.globalAlpha=0.9;
+    ctx.beginPath(); ctx.arc(absorp.x,absorp.y,14,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=1;
+    [[detB,COL.e,'검출기 B'],[detA,COL.h,'검출기 A']].forEach(([d,c,l])=>{
+      ctx.fillStyle=c; ctx.globalAlpha=0.85;
+      ctx.beginPath(); ctx.roundRect(d.x-30,d.y-17,60,34,7); ctx.fill();
+      ctx.globalAlpha=1; ctx.fillStyle='#0f172a'; ctx.font='700 12px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(l,d.x,d.y);
+    });
+    ctx.fillStyle='#94a3b8'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('빛 흡수 영역', absorp.x, absorp.y+30);
+    ctx.fillText('넓은 날개(전자)', (absorp.x+detB.x)/2+34, (absorp.y+detB.y)/2-32);
+    ctx.fillText('좁은 날개(양공)', (absorp.x+detA.x)/2-22, (absorp.y+detA.y)/2+32);
+  }
+
+  function newParticle(x,y,type,to,dur,delay){
+    return {type,ix:x,iy:y,x,y,tx:to.x,ty:to.y,dur,delay:delay||0,t:0,arrived:false,amplified:false};
+  }
+
+  function startLight(){
+    resetRun();
+    mode='photon'; photonY=-20;
+    setStatus('amp','빛 입사 중…');
+    disableBtns(true);
+  }
+
+  function startNoise(){
+    resetRun();
+    mode='moving'; simStart=performance.now();
+    // 노이즈: 날개에서 발생 → 한쪽만 생기거나 도달 시간 크게 어긋남
+    // 구조 내부 임의 위치에서 열 노이즈 발생 (완전 랜덤)
+    let x,y;
+    const which=Math.random();
+    if(which<0.5){ // 전자 날개 위 랜덤
+      const t=0.2+Math.random()*0.7;
+      const cx=absorp.x+(detB.x-absorp.x)*t, cy=absorp.y+(detB.y-absorp.y)*t;
+      const ang=Math.atan2(detB.y-absorp.y,detB.x-absorp.x)+Math.PI/2;
+      const off=(Math.random()-0.5)*2*(15+t*50);
+      x=cx+Math.cos(ang)*off; y=cy+Math.sin(ang)*off;
+    } else { // 양공 날개 위 랜덤
+      const t=0.2+Math.random()*0.7;
+      const cx=absorp.x+(detA.x-absorp.x)*t, cy=absorp.y+(detA.y-absorp.y)*t;
+      const ang=Math.atan2(detA.y-absorp.y,detA.x-absorp.x)+Math.PI/2;
+      const off=(Math.random()-0.5)*2*(10+t*30);
+      x=cx+Math.cos(ang)*off; y=cy+Math.sin(ang)*off;
+    }
+    // 노이즈는 대부분 한쪽 캐리어만 생성 → 동시 도달 불가
+    const r=Math.random();
+    if(r<0.6){
+      // 한쪽만 생성 (가까운 검출기로)
+      const toB=Math.hypot(x-detB.x,y-detB.y)<Math.hypot(x-detA.x,y-detA.y);
+      if(toB) particles=[newParticle(x,y,'e',detB,T_E*(0.3+Math.random()*0.4),0)];
+      else    particles=[newParticle(x,y,'h',detA,T_H*(0.3+Math.random()*0.4),0)];
+    } else {
+      // 둘 다 생기지만 발생위치가 치우쳐 도달 시간 크게 어긋남
+      particles=[
+        newParticle(x,y,'e',detB,T_E*(0.3+Math.random()*0.5),0),
+        newParticle(x,y,'h',detA,T_H*(0.3+Math.random()*0.5),(300+Math.random()*600))
+      ];
+    }
+    flashes.push({x,y,life:1,r:20,color:'249,115,22'});
+    setStatus('amp','열 노이즈 이동 중…');
+    disableBtns(true);
+  }
+
+  function spawnFromAbsorption(){
+    // 진짜 빛: 전자·양공 동시 생성, 거의 동시 도달(작은 지터)
+    const jE=(Math.random()-0.5)*60, jH=(Math.random()-0.5)*60;
+    particles=[
+      newParticle(absorp.x,absorp.y,'e',detB,T_E+jE,0),
+      newParticle(absorp.x,absorp.y,'h',detA,T_H+jH,0)
+    ];
+    flashes.push({x:absorp.x,y:absorp.y,life:1,r:26,color:'250,204,21'});
+    simStart=performance.now();
+    mode='moving';
+    setStatus('amp','전자·양공 이동 중…');
+  }
+
+  function resetRun(){
+    particles=[]; flashes=[]; ampCount=0; verdictInfo=null;
+    atoms.forEach(a=>a.hit=false);
+    document.getElementById('statAmp').textContent='0';
+    setStat('—','—','—');
+  }
+
+  function evaluate(){
+    const e=particles.find(p=>p.type==='e');
+    const h=particles.find(p=>p.type==='h');
+    const eArr = e && e.arrived ? (e.delay+e.dur) : null;
+    const hArr = h && h.arrived ? (h.delay+h.dur) : null;
+    let msg,cls,kind;
+
+    if(!e || !h || eArr===null || hArr===null){
+      msg='한쪽만 도달 → 노이즈 차단'; cls='noise'; kind='n';
+      setStat(e&&e.arrived?psFmt(e.delay+e.dur):'✗ 없음',
+              h&&h.arrived?psFmt(h.delay+h.dur):'✗ 없음','판정 불가');
+      cnt.n++;
+    } else {
+      const dt=Math.abs(eArr-hArr)/BASE*T_H_PS; // ps 환산
+      const within = dt<=tWindow;
+      if(within){ msg='✓ 동시 도달 → 빛으로 검출!'; cls='signal'; kind='s'; cnt.s++; detectPulse=60; }
+      else if(isSignalRun){ msg='⚠ 시간 어긋남 → 신호 놓침'; cls='noise'; kind='m'; cnt.m++; }
+      else { msg='✗ 시간 차이 큼 → 노이즈 차단'; cls='noise'; kind='n'; cnt.n++; }
+      setStat(psFmt(eArr),psFmt(hArr),dt.toFixed(0)+' ps');
+    }
+    verdictInfo={msg,ok:kind==='s'}; verdictStart=performance.now();
+    setStatus(kind==='s'?'signal':'noise', stripIcon(msg));
+    updateCnt();
+    mode='verdict';
+  }
+
+  const T_H_PS = 900; // 도달시간을 ps 스케일로 보여주기 위한 환산 계수
+  function psFmt(msVal){ return (msVal/BASE*T_H_PS).toFixed(0)+' ps'; }
+  function stripIcon(s){ return s.replace(/[✓✗⚠⚡]\s?/,''); }
+
+  let isSignalRun=false;
+
+  function loop(now){
+    const dt=(now-lastFrame); lastFrame=now;
+    drawStruct();
+    signalVal=0;
+
+    // 자발적 열 노이즈
+    if(mode==='idle'){
+      const tNorm=Math.max(0,(tempC+40)/160);
+      if(Math.random() < Math.pow(tNorm,3)*0.012){
+        isSignalRun=false; startNoiseAuto();
+      }
+    }
+
+    // 광자 낙하
+    if(mode==='photon'){
+      photonY += 0.16*dt*speed;
+      ctx.fillStyle=COL.photon; ctx.shadowBlur=14; ctx.shadowColor=COL.photon;
+      ctx.beginPath(); ctx.arc(absorp.x,photonY,7,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur=0;
+      if(photonY>=absorp.y){ spawnFromAbsorption(); }
+    }
+
+    // 입자 이동
+    if(mode==='moving'){
+      const el=(now-simStart)*speed;
+      particles.forEach(p=>{
+        if(p.arrived) return;
+        if(el < p.delay){ return; } // 아직 출발 안 함
+        const localT=el-p.delay;
+        const frac=Math.min(localT/p.dur,1);
+        p.x=p.ix+(p.tx-p.ix)*frac; p.y=p.iy+(p.ty-p.iy)*frac;
+        // 눈사태 증폭 (전자만, 흡수영역 출발 신호만 강하게)
+        if(p.type==='e'){
+          atoms.forEach(a=>{
+            if(!a.hit && Math.hypot(p.x-a.x,p.y-a.y)<15){
+              a.hit=true; ampCount++;
+              flashes.push({x:a.x,y:a.y,life:1,r:22,color:'239,68,68'});
+              document.getElementById('statAmp').textContent=ampCount;
+              // 충돌 지점에서 검출기 B로 향하는 증폭 전자 2개 생성 (부채꼴 확산)
+              for(let k=0;k<2;k++){
+                const spread=(Math.random()-0.5)*40;
+                const tgt={x:detB.x+spread, y:detB.y};
+                const np=newParticle(a.x,a.y,'e',tgt, p.dur*0.5,0);
+                np.amplified=true; particles.push(np);
+              }
+            }
+          });
+        }
+        if(frac>=1){ p.arrived=true; }
+      });
+
+      // 그리기
+      particles.forEach(p=>{
+        if((now-simStart)*speed < p.delay) return;
+        const c=p.type==='e'?COL.e:COL.h;
+        ctx.fillStyle=c; ctx.shadowBlur=p.amplified?8:6; ctx.shadowColor=c;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.amplified?4:7,0,Math.PI*2); ctx.fill();
+        ctx.shadowBlur=0;
+        if(!p.amplified){ ctx.fillStyle='#0f172a'; ctx.font='bold 10px sans-serif';
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(p.type==='e'?'−':'+',p.x,p.y); }
+      });
+
+      // 도달 상태 안내
+      const eP=particles.find(p=>p.type==='e'), hP=particles.find(p=>p.type==='h');
+      const eArr=eP&&eP.arrived, hArr=hP&&hP.arrived;
+      if(eArr && !hArr && hP) setStatus('amp','전자 도달, 양공 대기 중…');
+      else if(!eArr && hArr && eP) setStatus('amp','양공 도달, 전자 대기 중…');
+
+      // 종료 조건: 모든 입자가 도달했거나, 없는 입자는 무시하고 충분히 시간 경과
+      const maxEnd=Math.max(...particles.map(p=>p.delay+p.dur));
+      if(el > maxEnd + 200){ evaluate(); }
+    }
+
+    // 판정 표시 후 자동 복귀
+    if(mode==='verdict'){
+      const age=now-verdictStart;
+      // 도달한 입자는 검출기에 정지 상태로 표시
+      particles.forEach(p=>{ if(p.arrived){
+        const c=p.type==='e'?COL.e:COL.h; ctx.fillStyle=c;
+        ctx.beginPath(); ctx.arc(p.tx,p.ty,p.amplified?4:7,0,Math.PI*2); ctx.fill(); }});
+      if(age<1800 && verdictInfo){
+        ctx.globalAlpha=Math.max(0,1-age/1800);
+        ctx.fillStyle=verdictInfo.ok?'#22c55e':'#f97316';
+        ctx.font='700 20px sans-serif'; ctx.textAlign='center';
+        ctx.fillText(verdictInfo.msg,W/2,36); ctx.globalAlpha=1;
+      }
+      if(age>=1900){
+        // 완전 초기화 후 대기 상태로
+        particles=[]; flashes=[]; verdictInfo=null;
+        atoms.forEach(a=>a.hit=false);
+        mode='idle';
+        setStatus('','대기 중');
+        document.getElementById('statusVal').style.color='#94a3b8';
+        disableBtns(false);
+      }
+    }
+
+    // 플래시
+    flashes=flashes.filter(f=>f.life>0);
+    flashes.forEach(f=>{ f.life-=0.05;
+      ctx.beginPath(); ctx.arc(f.x,f.y,(1-f.life)*f.r,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(${f.color},${f.life})`; ctx.lineWidth=2; ctx.stroke(); });
+
+    // 신호 그래프: 검출 판정을 통과한 경우에만 펄스 출력
+    if(detectPulse>0){ signalVal=32; detectPulse--; } else { signalVal=0; }
+    smooth += (signalVal-smooth)*0.25;
+    history.push(smooth); history.shift();
+    drawGraph();
+
+    requestAnimationFrame(loop);
+  }
+
+  function drawGraph(){
+    gx.clearRect(0,0,GW,GH);
+    gx.strokeStyle='rgba(255,255,255,0.06)'; gx.lineWidth=1;
+    for(let y=0;y<GH;y+=22){ gx.beginPath(); gx.moveTo(0,y); gx.lineTo(GW,y); gx.stroke(); }
+    gx.beginPath(); gx.strokeStyle='#22c55e'; gx.lineWidth=2;
+    const max=40;
+    for(let i=0;i<history.length;i++){
+      const y=GH-8-(Math.min(history[i],max)/max)*(GH-16);
+      i===0?gx.moveTo(i,y):gx.lineTo(i,y);
+    }
+    gx.stroke();
+    gx.lineTo(GW,GH); gx.lineTo(0,GH); gx.closePath();
+    gx.fillStyle='rgba(34,197,94,0.12)'; gx.fill();
+    gx.strokeStyle='rgba(248,113,113,0.5)'; gx.setLineDash([4,4]); gx.lineWidth=1;
+    const thY=GH-8-(10/max)*(GH-16);
+    gx.beginPath(); gx.moveTo(0,thY); gx.lineTo(GW,thY); gx.stroke(); gx.setLineDash([]);
+    gx.fillStyle='#64748b'; gx.font='10px sans-serif'; gx.textAlign='left';
+    gx.fillText('검출 임계값', 6, thY-4);
+  }
+
+  function setStat(e,h,dt){
+    document.getElementById('statE').textContent=e;
+    document.getElementById('statH').textContent=h;
+    document.getElementById('statDt').textContent=dt;
+  }
+  function setStatus(cls,txt){
+    const s=document.getElementById('status');
+    s.className='status '+(cls==='signal'?'signal':cls==='noise'?'noise':cls==='amp'?'amp':'');
+    const v=document.getElementById('statusVal'); v.textContent=txt;
+    v.style.color= cls==='signal'?'#22c55e':cls==='noise'?'#f97316':cls==='amp'?'#ef4444':'#94a3b8';
+  }
+  function updateCnt(){
+    document.getElementById('cS').textContent=cnt.s;
+    document.getElementById('cN').textContent=cnt.n;
+    document.getElementById('cM').textContent=cnt.m;
+  }
+  function disableBtns(v){
+    document.getElementById('btnLight').disabled=v;
+    document.getElementById('btnNoise').disabled=v;
+  }
+
+  // noiseRun 모드 구분용
+  function startNoiseAuto(){ isSignalRun=false; startNoise(); }
+
+  document.getElementById('btnLight').onclick=()=>{ if(mode==='idle'){ isSignalRun=true; startLight(); } };
+  document.getElementById('btnNoise').onclick=()=>{ if(mode==='idle'){ isSignalRun=false; startNoise(); } };
+  document.getElementById('btnReset').onclick=()=>{
+    particles=[];flashes=[];verdictInfo=null;photonY=-20;
+    cnt={s:0,n:0,m:0};updateCnt();history=new Array(GW).fill(0);
+    atoms.forEach(a=>a.hit=false); mode='idle'; ampCount=0; detectPulse=0;
+    setStat('—','—','—'); setStatus('','대기 중');
+    document.getElementById('statAmp').textContent='0';
+    disableBtns(false);
+  };
+  document.getElementById('btnAuto').onclick=function(){
+    if(auto){ clearInterval(auto);auto=null;this.textContent='▶ 자동'; return; }
+    this.textContent='⏸ 정지';
+    auto=setInterval(()=>{ if(mode==='idle'){ const sig=Math.random()<0.5; isSignalRun=sig; sig?startLight():startNoise(); } }, 800);
+  };
+  document.getElementById('tempSlider').oninput=function(){ tempC=+this.value;
+    document.getElementById('tempOut').textContent=this.value+' °C'; };
+  document.getElementById('windowSlider').oninput=function(){ tWindow=+this.value;
+    document.getElementById('windowOut').textContent=this.value+' ps'; };
+  document.getElementById('speedSlider').oninput=function(){ speed=+this.value;
+    document.getElementById('speedOut').textContent=(+this.value).toFixed(2)+'×'; };
+
+  drawStruct(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
